@@ -6,15 +6,15 @@ The mechanism is the following:
 - Detect envs that will be used in this run and process each separately.
 - Find requirements files declared in `deps` parameter.
 - Check whether requirements file has changed from previous run.
-  This is check is done by comparing current version of requirements file
+  This check is done by comparing current version of requirements file
   with previously saved version of the file.
   Previous version file is saved in the file with the path:
       `<toxwordir>/<original-req-file-name>.<venv-name>.previous
 
 .. note::
 
-    It is not possible to save .previous file in the env specifiec directory
-    (``.tox/<venv>``) as it will be wiped on recreation and for this first
+    It is not possible to save .previous file in the env specific directory
+    (``.tox/<venv>``) as it will be wiped on recreation and for the first
     creation procedure.
 """
 
@@ -36,19 +36,13 @@ def tox_configure(config):
     return _ensure_envs_recreated_on_requirements_update(config)
 
 
-@hookimpl
-def tox_addoption(parser):
-    # add option to describe strategy how toreload updated requirements
-    pass
-
-
 def _ensure_envs_recreated_on_requirements_update(config):
     user_asked_to_recreate = config.option.recreate
     if user_asked_to_recreate:
         return config
 
-    is_enabled_env = lambda (env_name, env): env_name in config.envlist
-    for env_name, env in filter(is_enabled_env, config.envconfigs.items()):
+    is_enabled_env = lambda env: env.envname in config.envlist
+    for env in filter(is_enabled_env, config.envconfigs.values()):
         requires_recreation = are_requirements_changed(env)
         if not env.recreate and requires_recreation:
             env.recreate = True
@@ -65,7 +59,7 @@ def are_requirements_changed(config):
 
     def build_fpath_for_previous_version(fname):
         tox_dir = config.config.toxworkdir.strpath
-        fname = '{}.{}.previous'.format(
+        fname = '{0}.{0}.previous'.format(
             fname.replace('/', '-'), config.envname)
         return os.path.join(tox_dir, fname)
 
@@ -73,7 +67,7 @@ def are_requirements_changed(config):
     return any(
         is_changed(reqfile, build_fpath_for_previous_version(reqfile))
         for reqfile in requirement_files
-        if os.path.isfile(reqfile)
+        if reqfile and os.path.isfile(reqfile)
     )
 
 
@@ -86,7 +80,7 @@ def is_changed(fpath, prev_version_fpath):
     :raise ValueError: Requirements file doesn't exist.
     """
     if not (fpath and os.path.isfile(fpath)):
-        raise ValueError("Requirements file {!r} doesn't exist.".format(fpath))
+        raise ValueError("Requirements file {0!r} doesn't exist.".format(fpath))
 
     prev_version_exists = os.path.isfile(prev_version_fpath)
     changed = False
@@ -97,6 +91,9 @@ def is_changed(fpath, prev_version_fpath):
         changed = current_reqs != previous_reqs
 
     if changed or not prev_version_exists:
+        dirname = os.path.dirname(prev_version_fpath)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
         shutil.copy(fpath, prev_version_fpath)
     return changed
 
@@ -113,7 +110,6 @@ def parse_requirements_fname(dep_name):
     """Parse requirements file path from dependency declaration (-r<filepath>).
 
     >>> parse_requirements_fname('pep8')
-    None
     >>> parse_requirements_fname('-rrequirements.txt')
     'requirements.txt'
 

@@ -16,7 +16,7 @@ setuptools.setup(
     entry_points={'tox': [
         'toxbat-requirements = toxbat.requirements',
     ]},
-    install_requires=['tox'],
+    install_requires=['tox',],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
