@@ -30,8 +30,8 @@ from tox import hookimpl
 @hookimpl
 def tox_configure(config):
     """
-    @param tox.config.Config config: Configuration object to observe.
-    @rtype: tox.config.Config
+    :param tox.config.Config config: Configuration object to observe.
+    :rtype: tox.config.Config
     """
     return _ensure_envs_recreated_on_requirements_update(config)
 

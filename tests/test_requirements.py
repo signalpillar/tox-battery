@@ -16,6 +16,38 @@ def test_is_changed_fails_on_missing_req_file():
                                 'nonexisting/requirements.txt')
 
 
+def test_venv_notrecreated_without_requirements_file_update(tmpdir):
+    """Ensure recreation doesn't occur when requirement files
+    are not updated.
+
+    To ensure that venv is not recreated on second tox run we
+    create a marker file before in the venv folder. If venv is not
+    recreated, directory is not removed and maker file stays in it.
+
+    """
+    # given
+    tmpdir = tmpdir.strpath
+    path = lambda *args: os.path.join(tmpdir, *args)
+    update_file(path('tox.ini'), textwrap.dedent('''
+        [tox]
+        skipsdist=True
+
+        [testenv]
+        deps = -rreq1/requirements.txt
+        commands = {posargs}
+    '''))
+    update_file(path('req1/requirements.txt'), 'pytest-xdist==1.13.0')
+    run('tox -- python -V'.split(), tmpdir)
+    marker_fpath = path('.tox/python/marker.file')
+    update_file(marker_fpath, '')
+
+    # excercise
+    run('tox -- python -V'.split(), tmpdir)
+
+    # verify
+    assert os.path.isfile(marker_fpath)
+
+
 def test_venv_recreated_on_requirements_file_update(tmpdir):
     """Ensure environment recreated on requirements file changed."""
     # given
