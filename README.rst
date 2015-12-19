@@ -2,8 +2,8 @@
     :target: https://travis-ci.org/signalpillar/tox-battery
 
 
-The project is an attempt to add some functionality to the `tox
-<http://tox.readthedocs.org/en/latest/>`_ that is missing out of the box.
+The project is an attempt to add to the `tox
+<http://tox.readthedocs.org/en/latest/>`_ some missing out of the box functionality.
 
 Basically it is just an extension for the tool that will be loaded automatically.
 
