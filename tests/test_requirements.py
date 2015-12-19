@@ -36,12 +36,20 @@ def test_venv_notrecreated_without_requirements_file_update(tmpdir):
         deps = -rreq1/requirements.txt
         commands = {posargs}
     '''))
-    update_file(path('req1/requirements.txt'), 'pytest-xdist==1.13.0')
+    update_file(path('req1/requirements.txt'), textwrap.dedent('''
+        pytest-xdist==1.13.0
+        pep8
+    '''))
     run('tox -- python -V'.split(), tmpdir)
     marker_fpath = path('.tox/python/marker.file')
     update_file(marker_fpath, '')
 
     # excercise
+    # change places of dependencies
+    update_file(path('req1/requirements.txt'), textwrap.dedent('''
+        pep8
+        pytest-xdist==1.13.0
+    '''))
     run('tox -- python -V'.split(), tmpdir)
 
     # verify

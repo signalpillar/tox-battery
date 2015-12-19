@@ -86,9 +86,7 @@ def is_changed(fpath, prev_version_fpath):
     changed = False
 
     if prev_version_exists:
-        current_reqs = parse_requirements(content_of(fpath))
-        previous_reqs = parse_requirements(content_of(prev_version_fpath))
-        changed = current_reqs != previous_reqs
+        changed = not are_equal_requirement_files(fpath, prev_version_fpath)
 
     if changed or not prev_version_exists:
         dirname = os.path.dirname(prev_version_fpath)
@@ -96,6 +94,13 @@ def is_changed(fpath, prev_version_fpath):
             os.makedirs(dirname)
         shutil.copy(fpath, prev_version_fpath)
     return changed
+
+
+def are_equal_requirement_files(fpath1, fpath2):
+    hash_cmp = lambda r: r.hashCmp
+    reqs1 = sorted(parse_requirements(content_of(fpath1)), key=hash_cmp)
+    reqs2 = sorted(parse_requirements(content_of(fpath2)), key=hash_cmp)
+    return reqs1 == reqs2
 
 
 def parse_requirements(file_content):
