@@ -10,8 +10,10 @@ setuptools.setup(
     name='tox-battery',
     description='Additional functionality for tox',
     long_description=content_of("README.rst"),
+    license='http://opensource.org/licenses/MIT',
     version='0.0.1',
     author='Volodymyr Vitvitskyi',
+    author_email='contact.volodymyr@gmail.com',
     packages=setuptools.find_packages(),
     entry_points={'tox': [
         'toxbat-requirements = toxbat.requirements',
