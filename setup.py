@@ -14,6 +14,7 @@ setuptools.setup(
     version='0.0.1',
     author='Volodymyr Vitvitskyi',
     author_email='contact.volodymyr@gmail.com',
+    url='https://github.com/signalpillar/tox-battery',
     packages=setuptools.find_packages(),
     entry_points={'tox': [
         'toxbat-requirements = toxbat.requirements',
