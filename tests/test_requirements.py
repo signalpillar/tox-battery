@@ -98,8 +98,8 @@ def run(cmd, working_dir, ok_return_codes=(0,), capture_output=False):
         stdout, stderr = '', ''
 
     if p.returncode not in ok_return_codes:
-        raise Exception("Failed to execute 'tox' with return code {0}: {0}"
-                        .format(p.returncode, stdout + stderr))
+        raise Exception("Failed to execute {0!r} with return code {1}:\n {2}"
+                        .format(cmd, p.returncode, stdout + stderr))
     return p.returncode, str(stdout), str(stderr)
 
 
