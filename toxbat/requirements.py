@@ -19,11 +19,11 @@ The mechanism is the following:
 """
 
 # std
+import filecmp
 import os
 import shutil
 
 # 3rd-party
-import pkg_resources
 from tox import hookimpl
 
 
@@ -80,7 +80,8 @@ def is_changed(fpath, prev_version_fpath):
     :raise ValueError: Requirements file doesn't exist.
     """
     if not (fpath and os.path.isfile(fpath)):
-        raise ValueError("Requirements file {0!r} doesn't exist.".format(fpath))
+        raise ValueError(
+            "Requirements file {0!r} doesn't exist.".format(fpath))
 
     prev_version_exists = os.path.isfile(prev_version_fpath)
     changed = False
@@ -97,18 +98,7 @@ def is_changed(fpath, prev_version_fpath):
 
 
 def are_equal_requirement_files(fpath1, fpath2):
-    hash_cmp = lambda r: r.hashCmp
-    reqs1 = sorted(parse_requirements(content_of(fpath1)), key=hash_cmp)
-    reqs2 = sorted(parse_requirements(content_of(fpath2)), key=hash_cmp)
-    return reqs1 == reqs2
-
-
-def parse_requirements(file_content):
-    """
-    :param str file_content: Content of the requirements file
-    :rtype: list[pkg_resources.Requirements]
-    """
-    return list(pkg_resources.parse_requirements(file_content))
+    return filecmp.cmp(fpath1, fpath2)
 
 
 def parse_requirements_fname(dep_name):

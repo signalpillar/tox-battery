@@ -16,6 +16,42 @@ def test_is_changed_fails_on_missing_req_file():
                                 'nonexisting/requirements.txt')
 
 
+def test_venv_recreated_with_simple_changes_in_file(tmpdir):
+    """ Environment is recreated on any file change.
+    We don't understand semantics of the requirements file,
+    so even simple line swapping trigger environment recreation.
+    """
+    # given
+    tmpdir = tmpdir.strpath
+    path = lambda *args: os.path.join(tmpdir, *args)
+    update_file(path('tox.ini'), textwrap.dedent('''
+        [tox]
+        skipsdist=True
+
+        [testenv:python]
+        deps = -rreq1/requirements.txt
+        commands = {posargs}
+    '''))
+    update_file(path('req1/requirements.txt'), textwrap.dedent('''
+        pytest-xdist==1.13.0
+        pep8
+    '''))
+    run('tox -e python -- python -V'.split(), tmpdir)
+    marker_fpath = path('.tox/python/marker.file')
+    update_file(marker_fpath, '')
+
+    # excercise
+    # change order of dependencies
+    update_file(path('req1/requirements.txt'), textwrap.dedent('''
+        pep8
+        pytest-xdist==1.13.0
+    '''))
+    run('tox -e python -- python -V'.split(), tmpdir)
+
+    # verify
+    assert not os.path.isfile(marker_fpath)
+
+
 def test_venv_notrecreated_without_requirements_file_update(tmpdir):
     """Ensure recreation doesn't occur when requirement files
     are not updated.
@@ -32,7 +68,7 @@ def test_venv_notrecreated_without_requirements_file_update(tmpdir):
         [tox]
         skipsdist=True
 
-        [testenv]
+        [testenv:python]
         deps = -rreq1/requirements.txt
         commands = {posargs}
     '''))
@@ -40,19 +76,15 @@ def test_venv_notrecreated_without_requirements_file_update(tmpdir):
         pytest-xdist==1.13.0
         pep8
     '''))
-    run('tox -- python -V'.split(), tmpdir)
+    run('tox -e python -- python -V'.split(), tmpdir)
     marker_fpath = path('.tox/python/marker.file')
     update_file(marker_fpath, '')
 
     # excercise
-    # change places of dependencies
-    update_file(path('req1/requirements.txt'), textwrap.dedent('''
-        pep8
-        pytest-xdist==1.13.0
-    '''))
-    run('tox -- python -V'.split(), tmpdir)
+    # nothing chnaged in the file
+    run('tox -e python -- python -V'.split(), tmpdir)
 
-    # verify
+    # verify that marker file exists as we didn't recreate environment
     assert os.path.isfile(marker_fpath)
 
 
