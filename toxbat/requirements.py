@@ -24,6 +24,8 @@ import os
 import shutil
 
 # 3rd-party
+from pip.download import PipSession
+from pip.req import parse_requirements
 from tox import hookimpl
 
 
@@ -59,16 +61,26 @@ def are_requirements_changed(config):
 
     def build_fpath_for_previous_version(fname):
         tox_dir = config.config.toxworkdir.strpath
-        fname = '{0}.{0}.previous'.format(
-            fname.replace('/', '-'), config.envname)
+        fname = '{0}.{0}.previous'.format(fname.replace('/', '-'), config.envname)
         return os.path.join(tox_dir, fname)
 
     requirement_files = map(parse_requirements_fname, deps)
     return any(
         is_changed(reqfile, build_fpath_for_previous_version(reqfile))
-        for reqfile in requirement_files
-        if reqfile and os.path.isfile(reqfile)
-    )
+        for reqfile in requirement_files if reqfile and os.path.isfile(reqfile))
+
+
+def parse_pip_requirements(requirement_file_path):
+    """
+    Parses requirements using the pip API.
+
+    :param str requirement_file_path: path of the requirement file to parse.
+    :returns list: list of requirements
+    """
+    return [
+        str(r.req) for r in parse_requirements(
+            requirement_file_path, session=PipSession()) if r.req
+    ]
 
 
 def is_changed(fpath, prev_version_fpath):
@@ -80,25 +92,30 @@ def is_changed(fpath, prev_version_fpath):
     :raise ValueError: Requirements file doesn't exist.
     """
     if not (fpath and os.path.isfile(fpath)):
-        raise ValueError(
-            "Requirements file {0!r} doesn't exist.".format(fpath))
+        raise ValueError("Requirements file {0!r} doesn't exist.".format(fpath))
 
-    prev_version_exists = os.path.isfile(prev_version_fpath)
-    changed = False
+    # Compile the list of new requirements.
+    new_requirements = parse_pip_requirements(fpath)
 
-    if prev_version_exists:
-        changed = not are_equal_requirement_files(fpath, prev_version_fpath)
+    # Hash them.
+    new_requirements_hash = hash(str(new_requirements))
 
-    if changed or not prev_version_exists:
-        dirname = os.path.dirname(prev_version_fpath)
-        if not os.path.isdir(dirname):
-            os.makedirs(dirname)
-        shutil.copy(fpath, prev_version_fpath)
-    return changed
+    # Read the hash of the previous requirements if any.
+    previous_requirements_hash = 0
+    if os.path.exists(prev_version_fpath):
+        with open(prev_version_fpath) as fd:
+            content = fd.read()
+            previous_requirements_hash = int(content)
 
+    # Create/Update the file with the hash of the new requirements.
+    dirname = os.path.dirname(prev_version_fpath)
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+    with open(prev_version_fpath, 'w+') as fd:
+        fd.write(str(new_requirements_hash))
 
-def are_equal_requirement_files(fpath1, fpath2):
-    return filecmp.cmp(fpath1, fpath2)
+    # Compare the hash of the new requirements with the hash of the previous requirements.
+    return previous_requirements_hash != new_requirements_hash
 
 
 def parse_requirements_fname(dep_name):
@@ -116,8 +133,3 @@ def parse_requirements_fname(dep_name):
     req_option = '-r'
     if dep_name.startswith(req_option):
         return dep_name[len(req_option):]
-
-
-def content_of(fpath):
-    with open(fpath) as fd:
-        return fd.read()
