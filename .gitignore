@@ -12,6 +12,7 @@ build
 eggs
 parts
 sdist
+dist
 
 # Installer logs
 pip-log.txt
