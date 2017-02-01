@@ -20,6 +20,7 @@ The mechanism is the following:
 
 # std
 import filecmp
+import hashlib
 import os
 import shutil
 
@@ -61,7 +62,7 @@ def are_requirements_changed(config):
 
     def build_fpath_for_previous_version(fname):
         tox_dir = config.config.toxworkdir.strpath
-        fname = '{0}.{0}.previous'.format(fname.replace('/', '-'), config.envname)
+        fname = '{0}.{1}.previous'.format(fname.replace('/', '-'), config.envname)
         return os.path.join(tox_dir, fname)
 
     requirement_files = map(parse_requirements_fname, deps)
@@ -98,21 +99,20 @@ def is_changed(fpath, prev_version_fpath):
     new_requirements = parse_pip_requirements(fpath)
 
     # Hash them.
-    new_requirements_hash = hash(str(new_requirements))
+    new_requirements_hash = hashlib.sha1(str(new_requirements).encode('utf-8')).hexdigest()
 
     # Read the hash of the previous requirements if any.
     previous_requirements_hash = 0
     if os.path.exists(prev_version_fpath):
         with open(prev_version_fpath) as fd:
-            content = fd.read()
-            previous_requirements_hash = int(content)
+            previous_requirements_hash = fd.read()
 
     # Create/Update the file with the hash of the new requirements.
     dirname = os.path.dirname(prev_version_fpath)
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
     with open(prev_version_fpath, 'w+') as fd:
-        fd.write(str(new_requirements_hash))
+        fd.write(new_requirements_hash)
 
     # Compare the hash of the new requirements with the hash of the previous requirements.
     return previous_requirements_hash != new_requirements_hash
