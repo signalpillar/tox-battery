@@ -61,7 +61,7 @@ def are_requirements_changed(config):
 
     def build_fpath_for_previous_version(fname):
         tox_dir = config.config.toxworkdir.strpath
-        fname = '{0}.{0}.previous'.format(fname.replace('/', '-'), config.envname)
+        fname = '{0}.{1}.previous'.format(fname.replace('/', '-'), config.envname)
         return os.path.join(tox_dir, fname)
 
     requirement_files = map(parse_requirements_fname, deps)
