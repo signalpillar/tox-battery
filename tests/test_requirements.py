@@ -50,12 +50,12 @@ def test_venv_recreated_with_simple_changes_in_file(tmpdir):
         textwrap.dedent('''
         pep8
         pytest-xdist==1.13.0
+        # ^ dependency for testing
     '''))
     run('tox -e python -- python -V'.split(), tmpdir)
 
     # verify
     assert not os.path.isfile(marker_fpath)
-    # assert True
 
 
 def test_venv_notrecreated_without_requirements_file_update(tmpdir):
@@ -76,7 +76,7 @@ def test_venv_notrecreated_without_requirements_file_update(tmpdir):
         [tox]
         skipsdist=True
 
-        [testenv:python]
+        [testenv:testenvname]
         deps = -rreq1/requirements.txt
         commands = {posargs}
     '''))
@@ -86,15 +86,20 @@ def test_venv_notrecreated_without_requirements_file_update(tmpdir):
         pytest-xdist==1.13.0
         pep8
     '''))
-    run('tox -e python -- python -V'.split(), tmpdir)
+    run('tox -e testenvname -- python -V'.split(), tmpdir)
     marker_fpath = path('.tox/python/marker.file')
     update_file(marker_fpath, '')
 
     # excercise
     # nothing chnaged in the file
-    run('tox -e python -- python -V'.split(), tmpdir)
+    run('tox -e testenvname -- python -V'.split(), tmpdir)
 
-    # verify that marker file exists as we didn't recreate environment
+    # verify
+    previous_state_hash_file = path('.tox/req1-requirements.txt.testenvname.previous')
+    # Ensure file with current requirements saved as a hash.
+    assert os.path.isfile(previous_state_hash_file)
+    assert read_text_file(previous_state_hash_file) == 'fe75072a8b7548c8ef6a18ecfae1506c16c90ba3'
+    # Verify that marker file exists as we didn't recreate environment.
     assert os.path.isfile(marker_fpath)
 
 
@@ -154,7 +159,8 @@ def test_venv_recreated_on_nested_requirements_file_update(tmpdir):
 
 
 def test_venv_not_recreated_when_nested_requirements_file_do_not_change(tmpdir):
-    """Ensures the venvs do not get recreated when nothing changes in the nested rquirements files."""
+    """Ensures the venvs do not get recreated when nothing changes in the nested rquirements files.
+    """
     # given
     tmpdir = tmpdir.strpath
     path = lambda *args: os.path.join(tmpdir, *args)
@@ -209,3 +215,8 @@ def update_file(fpath, content):
         os.makedirs(fdir)
     with open(fpath, 'w') as fd:
         fd.write(content)
+
+
+def read_text_file(fpath):
+    with open(fpath, 'r') as fd:
+        return fd.read()

@@ -11,7 +11,7 @@ setuptools.setup(
     description='Additional functionality for tox',
     long_description=content_of("README.rst"),
     license='http://opensource.org/licenses/MIT',
-    version='0.3',
+    version='0.4',
     author='Volodymyr Vitvitskyi',
     author_email='contact.volodymyr@gmail.com',
     url='https://github.com/signalpillar/tox-battery',
