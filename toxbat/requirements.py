@@ -6,10 +6,22 @@ The mechanism is the following:
 - Detect envs that will be used in this run and process each separately.
 - Find requirements files declared in `deps` parameter.
 - Check whether requirements file has changed from previous run.
-  This check is done by comparing current version of requirements file
-  with previously saved version of the file.
-  Previous version file is saved in the file with the path:
-      `<toxwordir>/<original-req-file-name>.<venv-name>.previous
+  This check is done by comparing SHA1 sum of the requirements parsed from the
+  current version of the file and sum computed from previous run and saved in a
+  special file. File with previous version is saved in the file with the path:
+      `<toxwordir>/<original-req-file-name>.<venvpathSHA1>.previous
+
+Name of the version file is composed from 2 parts:
+
+* Original requirements file name, so we can distinguish it, if there are
+  multiple requirement files.
+* ``venvpathSHA1``. This part allows us ignore the fact in which testenv file
+  is used but focus on venv. Previously instead of SHA1 name of testenv was
+  used that works most of the time, but breaks behavior when user sets
+  ``envdir``
+  (`see <http://tox.readthedocs.io/en/latest/config.html#confval-envdir>`_).
+  This is because tox-battery expected to find previous-version file for each
+  testenv regardless whether they use same venv or not.
 
 .. note::
 
@@ -19,10 +31,8 @@ The mechanism is the following:
 """
 
 # std
-import filecmp
 import hashlib
 import os
-import shutil
 
 # 3rd-party
 from pip.download import PipSession
@@ -44,7 +54,9 @@ def _ensure_envs_recreated_on_requirements_update(config):
     if user_asked_to_recreate:
         return config
 
-    is_enabled_env = lambda env: env.envname in config.envlist
+    def is_enabled_env(env):
+        return env.envname in config.envlist
+
     for env in filter(is_enabled_env, config.envconfigs.values()):
         requires_recreation = are_requirements_changed(env)
         if not env.recreate and requires_recreation:
@@ -62,13 +74,15 @@ def are_requirements_changed(config):
 
     def build_fpath_for_previous_version(fname):
         tox_dir = config.config.toxworkdir.strpath
-        fname = '{0}.{1}.previous'.format(fname.replace('/', '-'), config.envname)
+        envdirkey = _str_to_sha1hex(str(config.envdir))
+        fname = '{0}.{1}.previous'.format(fname.replace('/', '-'), envdirkey)
         return os.path.join(tox_dir, fname)
 
     requirement_files = map(parse_requirements_fname, deps)
     return any(
         is_changed(reqfile, build_fpath_for_previous_version(reqfile))
-        for reqfile in requirement_files if reqfile and os.path.isfile(reqfile))
+        for reqfile in requirement_files
+        if reqfile and os.path.isfile(reqfile))
 
 
 def parse_pip_requirements(requirement_file_path):
@@ -78,10 +92,12 @@ def parse_pip_requirements(requirement_file_path):
     :param str requirement_file_path: path of the requirement file to parse.
     :returns list: list of requirements
     """
-    return [
-        str(r.req) for r in parse_requirements(
-            requirement_file_path, session=PipSession()) if r.req
-    ]
+    return sorted(
+        str(r.req)
+        for r in parse_requirements(requirement_file_path,
+                                    session=PipSession())
+        if r.req
+    )
 
 
 def is_changed(fpath, prev_version_fpath):
@@ -99,7 +115,7 @@ def is_changed(fpath, prev_version_fpath):
     new_requirements = parse_pip_requirements(fpath)
 
     # Hash them.
-    new_requirements_hash = hashlib.sha1(str(new_requirements).encode('utf-8')).hexdigest()
+    new_requirements_hash = _str_to_sha1hex(str(new_requirements))
 
     # Read the hash of the previous requirements if any.
     previous_requirements_hash = 0
@@ -109,12 +125,14 @@ def is_changed(fpath, prev_version_fpath):
 
     # Create/Update the file with the hash of the new requirements.
     dirname = os.path.dirname(prev_version_fpath)
+    # First time when running tox in the project .tox directory is missing.
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
     with open(prev_version_fpath, 'w+') as fd:
         fd.write(new_requirements_hash)
 
-    # Compare the hash of the new requirements with the hash of the previous requirements.
+    # Compare the hash of the new requirements with the hash of the previous
+    # requirements.
     return previous_requirements_hash != new_requirements_hash
 
 
@@ -133,3 +151,12 @@ def parse_requirements_fname(dep_name):
     req_option = '-r'
     if dep_name.startswith(req_option):
         return dep_name[len(req_option):]
+
+
+def _str_to_sha1hex(v):
+    """ Turn string into a SHA1 hex-digest.
+
+    >>> _str_to_sha1hex('abc')
+    'a9993e364706816aba3e25717850c26c9cd0d89d'
+    """
+    return hashlib.sha1(v.encode('utf-8')).hexdigest()
