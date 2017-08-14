@@ -79,10 +79,10 @@ def are_requirements_changed(config):
         return os.path.join(tox_dir, fname)
 
     requirement_files = map(parse_requirements_fname, deps)
-    return any(
+    return any([
         is_changed(reqfile, build_fpath_for_previous_version(reqfile))
         for reqfile in requirement_files
-        if reqfile and os.path.isfile(reqfile))
+        if reqfile and os.path.isfile(reqfile)])
 
 
 def parse_pip_requirements(requirement_file_path):

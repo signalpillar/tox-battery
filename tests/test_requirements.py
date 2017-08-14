@@ -219,6 +219,36 @@ def test_venv_not_recreated_when_nested_requirements_file_do_not_change(in_proje
     assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
 
 
+def test_all_requirements_files_are_hashed(in_project, cwd):
+    """ Ensure .previous files are created for all req-files in testenv.
+
+    First run for the testenv should produce hash files for all the requirement
+    files specified in the dependencies.
+    """
+    # given
+    update_file(
+        in_project('tox.ini'),
+        textwrap.dedent('''
+        [tox]
+        skipsdist=True
+
+        [testenv]
+        deps =
+            -rreq1/requirements.txt
+            -rreq2/requirements.txt
+        commands = {posargs}
+    '''))
+    update_file(in_project('req1/requirements.txt'), 'pep8\n')
+    update_file(in_project('req2/requirements.txt'), 'click\n')
+
+    # exercise
+    run("tox -- python -V", cwd)
+
+    # verify
+    prev_files = glob.glob(in_project('.tox/req*-requirements.txt.*.previous'))
+    assert 2 == len(prev_files), prev_files
+
+
 def assert_package_intalled(toxini_dir, package, version):
     _, output, _ = run('tox -- pip freeze', toxini_dir, capture_output=True)
     expected_line = "{0}=={1}".format(package, version)
