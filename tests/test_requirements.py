@@ -1,5 +1,7 @@
 # std
+import glob
 import os
+import shlex
 import subprocess
 import textwrap
 
@@ -15,16 +17,89 @@ def test_is_changed_fails_on_missing_req_file():
         requirements.is_changed('nonexisting/requirements.txt', 'nonexisting/requirements.txt')
 
 
-def test_venv_recreated_with_simple_changes_in_file(tmpdir):
-    """ Environment is recreated on any file change.
-    We don't understand semantics of the requirements file,
-    so even simple line swapping trigger environment recreation.
+@pytest.fixture(scope='function')
+def in_project(tmpdir):
+    """ Provide a function to calculate path in a temporary project.
+    """
+    def build_path(*args):
+        return os.path.join(tmpdir.strpath, *args)
+    yield build_path
+
+
+@pytest.fixture(scope='function')
+def cwd(in_project):
+    """ Provide CWD path for the temporary project (root of the project).
+    """
+    yield in_project('.')
+
+
+def test_venv_reused_for_different_testenvironments(in_project, cwd):
+    """ Ensure venv reused by multiple test-environments without recreation.
+
+    Declared test environments in tox.ini file can be run same virtual
+    environment if they share same dependencies.
+
+    In this test we need to check that environment (same) is not recreated each
+    time because it is used by multiple test environments.
+
+    In this test we have a 'test-requirements.txt' file that declares flake8
+    and pytest and tox declares 2 test environments that reuse same
+    dependencies.
+
+    Normally tox creates a separate virtual environment for each test-env but
+    in our case 'envdir' is set to fix the path and reuse environment::
+
+        envdir = {toxworkdir}/env
     """
     # given
-    tmpdir = tmpdir.strpath
-    path = lambda *args: os.path.join(tmpdir, *args)
     update_file(
-        path('tox.ini'),
+        in_project('tox.ini'),
+        textwrap.dedent('''
+        [tox]
+        envlist = flake8, unit
+        skipsdist = True
+
+        [testenv]
+        envdir = {toxworkdir}/env
+        deps =
+            -rrequirements-test.txt
+        commands =
+            flake8,test: flake8 --version
+            unit,test: pytest --version
+    '''))
+    update_file(
+        in_project('requirements-test.txt'),
+        textwrap.dedent('''
+        pytest
+        flake8
+    '''))
+
+    # exercise
+    _, stdout, stderr = run('tox', cwd, capture_output=True)
+
+    # verify
+    assert 'unit recreate:' not in stdout,\
+        (
+            "Found in command output that 'unit' test environment is "
+            "recreated while it is expected to reuse existing "
+            "'{toxworkdir}/env' virtual environment."
+        )
+
+
+def test_requirements_are_parsed(in_project, cwd):
+    """ Environment is not recreated on any file change.
+
+    As requirements file is parsed by pip library and tox-battery operates with
+    parsed content and not text - reshuffling of the lines and adding comments
+    doesn't cause of rebuilding the venvs.
+
+    To ensure that venv is not recreated on second tox run we create a marker
+    file before in the venv folder. If venv is not recreated, directory is not
+    removed and maker file stays in it.
+    """
+    # given
+    update_file(
+        in_project('tox.ini'),
         textwrap.dedent('''
         [tox]
         skipsdist=True
@@ -34,82 +109,42 @@ def test_venv_recreated_with_simple_changes_in_file(tmpdir):
         commands = {posargs}
     '''))
     update_file(
-        path('req1/requirements.txt'),
+        in_project('req1/requirements.txt'),
         textwrap.dedent('''
         pytest-xdist==1.13.0
         pep8
     '''))
-    run('tox -e python -- python -V'.split(), tmpdir)
-    marker_fpath = path('.tox/python/marker.file')
+    run('tox -e python -- python -V', cwd)
+    marker_fpath = in_project('.tox/python/marker.file')
     update_file(marker_fpath, '')
 
-    # excercise
+    # exercise
     # change order of dependencies
     update_file(
-        path('req1/requirements.txt'),
+        in_project('req1/requirements.txt'),
         textwrap.dedent('''
         pep8
         pytest-xdist==1.13.0
         # ^ dependency for testing
     '''))
-    run('tox -e python -- python -V'.split(), tmpdir)
+    run('tox -e python -- python -V', cwd)
 
     # verify
-    assert not os.path.isfile(marker_fpath)
+    previous_state_hash_file = in_project(
+        '.tox/req1-requirements.txt.*.previous')
+    matched = glob.glob(previous_state_hash_file)
+    assert matched, "Previous version file is not found."
+    # Ensure file with current requirements saved as a hash.
+    expected_reqscontent_sum = 'eb30f761445bda7ca0fe06400a686a31ade734d1'
+    assert expected_reqscontent_sum == read_text_file(matched[0])
 
 
-def test_venv_notrecreated_without_requirements_file_update(tmpdir):
-    """Ensure recreation doesn't occur when requirement files
-    are not updated.
-
-    To ensure that venv is not recreated on second tox run we
-    create a marker file before in the venv folder. If venv is not
-    recreated, directory is not removed and maker file stays in it.
-
+def test_venv_recreated_on_requirements_file_update(in_project, cwd):
+    """Ensure environment recreated on requirements file changed.
     """
     # given
-    tmpdir = tmpdir.strpath
-    path = lambda *args: os.path.join(tmpdir, *args)
     update_file(
-        path('tox.ini'),
-        textwrap.dedent('''
-        [tox]
-        skipsdist=True
-
-        [testenv:testenvname]
-        deps = -rreq1/requirements.txt
-        commands = {posargs}
-    '''))
-    update_file(
-        path('req1/requirements.txt'),
-        textwrap.dedent('''
-        pytest-xdist==1.13.0
-        pep8
-    '''))
-    run('tox -e testenvname -- python -V'.split(), tmpdir)
-    marker_fpath = path('.tox/python/marker.file')
-    update_file(marker_fpath, '')
-
-    # excercise
-    # nothing chnaged in the file
-    run('tox -e testenvname -- python -V'.split(), tmpdir)
-
-    # verify
-    previous_state_hash_file = path('.tox/req1-requirements.txt.testenvname.previous')
-    # Ensure file with current requirements saved as a hash.
-    assert os.path.isfile(previous_state_hash_file)
-    assert read_text_file(previous_state_hash_file) == 'fe75072a8b7548c8ef6a18ecfae1506c16c90ba3'
-    # Verify that marker file exists as we didn't recreate environment.
-    assert os.path.isfile(marker_fpath)
-
-
-def test_venv_recreated_on_requirements_file_update(tmpdir):
-    """Ensure environment recreated on requirements file changed."""
-    # given
-    tmpdir = tmpdir.strpath
-    path = lambda *args: os.path.join(tmpdir, *args)
-    update_file(
-        path('tox.ini'),
+        in_project('tox.ini'),
         textwrap.dedent('''
         [tox]
         skipsdist=True
@@ -118,25 +153,24 @@ def test_venv_recreated_on_requirements_file_update(tmpdir):
         deps = -rreq1/requirements.txt
         commands = {posargs}
     '''))
-    update_file(path('req1/requirements.txt'), 'pytest-xdist==1.13.0\n')
+    update_file(in_project('req1/requirements.txt'), 'pytest-xdist==1.13.0\n')
 
-    # excercise
-    run('tox -- python -V'.split(), tmpdir)
-    assert_package_intalled(tmpdir, package='pytest-xdist', version='1.13')
-    update_file(path('req1/requirements.txt'), 'pytest-xdist==1.13.1\n')
-    run('tox -- python -V'.split(), tmpdir)
+    # exercise
+    run('tox -- python -V', cwd)
+    assert_package_intalled(cwd, package='pytest-xdist', version='1.13')
+    update_file(in_project('req1/requirements.txt'), 'pytest-xdist==1.13.1\n')
+    run('tox -- python -V', cwd)
 
     # verify
-    assert_package_intalled(tmpdir, package='pytest-xdist', version='1.13.1')
+    assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
 
 
-def test_venv_recreated_on_nested_requirements_file_update(tmpdir):
-    """Ensures a change in nested requirements recreates the venvs."""
+def test_venv_recreated_on_nested_requirements_file_update(in_project, cwd):
+    """Ensures a change in nested requirements recreates the venvs.
+    """
     # given
-    tmpdir = tmpdir.strpath
-    path = lambda *args: os.path.join(tmpdir, *args)
     update_file(
-        path('tox.ini'),
+        in_project('tox.ini'),
         textwrap.dedent('''
         [tox]
         skipsdist=True
@@ -145,27 +179,25 @@ def test_venv_recreated_on_nested_requirements_file_update(tmpdir):
         deps = -rreq1/requirements.txt
         commands = {posargs}
     '''))
-    update_file(path('req1/requirements.txt'), '-r requirements/base.txt\n')
-    update_file(path('req1/requirements/base.txt'), 'pytest-xdist==1.13.0\n')
+    update_file(in_project('req1/requirements.txt'), '-r requirements/base.txt\n')
+    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.0\n')
 
-    # excercise
-    run('tox -- python -V'.split(), tmpdir)
-    assert_package_intalled(tmpdir, package='pytest-xdist', version='1.13')
-    update_file(path('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
-    run('tox -- python -V'.split(), tmpdir)
+    # exercise
+    run('tox -- python -V', cwd)
+    assert_package_intalled(cwd, package='pytest-xdist', version='1.13')
+    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
+    run('tox -- python -V', cwd)
 
     # verify
-    assert_package_intalled(tmpdir, package='pytest-xdist', version='1.13.1')
+    assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
 
 
-def test_venv_not_recreated_when_nested_requirements_file_do_not_change(tmpdir):
+def test_venv_not_recreated_when_nested_requirements_file_do_not_change(in_project, cwd):
     """Ensures the venvs do not get recreated when nothing changes in the nested rquirements files.
     """
     # given
-    tmpdir = tmpdir.strpath
-    path = lambda *args: os.path.join(tmpdir, *args)
     update_file(
-        path('tox.ini'),
+        in_project('tox.ini'),
         textwrap.dedent('''
         [tox]
         skipsdist=True
@@ -174,26 +206,58 @@ def test_venv_not_recreated_when_nested_requirements_file_do_not_change(tmpdir):
         deps = -rreq1/requirements.txt
         commands = {posargs}
     '''))
-    update_file(path('req1/requirements.txt'), '-r requirements/base.txt\n')
-    update_file(path('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
+    update_file(in_project('req1/requirements.txt'), '-r requirements/base.txt\n')
+    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
 
-    # excercise
-    run('tox -- python -V'.split(), tmpdir)
-    assert_package_intalled(tmpdir, package='pytest-xdist', version='1.13')
-    update_file(path('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
-    run('tox -- python -V'.split(), tmpdir)
+    # exercise
+    run('tox -- python -V', cwd)
+    assert_package_intalled(cwd, package='pytest-xdist', version='1.13')
+    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
+    run('tox -- python -V', cwd)
 
     # verify
-    assert_package_intalled(tmpdir, package='pytest-xdist', version='1.13.1')
+    assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
+
+
+def test_all_requirements_files_are_hashed(in_project, cwd):
+    """ Ensure .previous files are created for all req-files in testenv.
+
+    First run for the testenv should produce hash files for all the requirement
+    files specified in the dependencies.
+    """
+    # given
+    update_file(
+        in_project('tox.ini'),
+        textwrap.dedent('''
+        [tox]
+        skipsdist=True
+
+        [testenv]
+        deps =
+            -rreq1/requirements.txt
+            -rreq2/requirements.txt
+        commands = {posargs}
+    '''))
+    update_file(in_project('req1/requirements.txt'), 'pep8\n')
+    update_file(in_project('req2/requirements.txt'), 'click\n')
+
+    # exercise
+    run("tox -- python -V", cwd)
+
+    # verify
+    prev_files = glob.glob(in_project('.tox/req*-requirements.txt.*.previous'))
+    assert 2 == len(prev_files), prev_files
 
 
 def assert_package_intalled(toxini_dir, package, version):
-    _, output, _ = run('tox -- pip freeze'.split(), toxini_dir, capture_output=True)
+    _, output, _ = run('tox -- pip freeze', toxini_dir, capture_output=True)
     expected_line = "{0}=={1}".format(package, version)
     assert expected_line in output
 
 
 def run(cmd, working_dir, ok_return_codes=(0, ), capture_output=False):
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
     p = subprocess.Popen(
         cmd,
         cwd=working_dir,
