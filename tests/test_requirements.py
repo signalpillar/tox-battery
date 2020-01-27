@@ -64,6 +64,7 @@ def test_venv_reused_for_different_testenvironments(in_project, cwd):
         deps =
             -rrequirements-test.txt
         commands =
+            pip --version
             flake8,test: flake8 --version
             unit,test: pytest --version
     '''))
@@ -76,6 +77,7 @@ def test_venv_reused_for_different_testenvironments(in_project, cwd):
 
     # exercise
     _, stdout, stderr = run('tox', cwd, capture_output=True)
+    print(stdout)
 
     # verify
     assert 'unit recreate:' not in stdout,\
