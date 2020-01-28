@@ -1,0 +1,52 @@
+version: 2
+
+
+run_tox_in_project_steps: &run_tox_in_project_steps
+  working_directory: ~/project
+  steps:
+    - checkout:
+        path: ~/project/
+    - run: pip install --user tox-pip-version tox
+    - run: ~/.local/bin/tox
+
+jobs:
+  test_py36_pip20:
+    docker:
+      - image: circleci/python:3.6
+        environment:
+          TOX_PIP_VERSION: 20.0.2
+    <<: *run_tox_in_project_steps
+  test_py36_pip19:
+    docker:
+      - image: circleci/python:3.6
+        environment:
+          TOX_PIP_VERSION: 19.3.1
+    <<: *run_tox_in_project_steps
+  test_py37_pip20:
+    docker:
+      - image: circleci/python:3.7
+        environment:
+          TOX_PIP_VERSION: 20.0.2
+    <<: *run_tox_in_project_steps
+  test_py38_pip20:
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOX_PIP_VERSION: 20.0.2
+    <<: *run_tox_in_project_steps
+  test_py39_pip20:
+    docker:
+      - image: circleci/python:3.9
+        environment:
+          TOX_PIP_VERSION: 20.0.2
+    <<: *run_tox_in_project_steps
+
+workflows:
+  version: 2
+  test-matrix:
+    jobs:
+      - test_py36_pip19
+      - test_py36_pip20
+      - test_py37_pip20
+      - test_py38_pip20
+      - test_py39_pip20
