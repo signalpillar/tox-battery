@@ -21,14 +21,12 @@ setuptools.setup(
     ]},
     install_requires=['tox'],
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Operating System :: POSIX',
         'Operating System :: Microsoft :: Windows',
         'Operating System :: MacOS :: MacOS X',
         'Topic :: Software Development :: Testing',
         'Topic :: Software Development :: Libraries',
-        'Topic :: Utilities',
-        'Programming Language :: Python',
         'Programming Language :: Python :: 3'],
 )
