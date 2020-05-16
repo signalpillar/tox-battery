@@ -14,23 +14,27 @@ import pytest
 
 def test_is_changed_fails_on_missing_req_file():
     with pytest.raises(ValueError):
-        requirements.is_changed('nonexisting/requirements.txt', 'nonexisting/requirements.txt')
+        requirements.is_changed(
+            "nonexisting/requirements.txt", "nonexisting/requirements.txt"
+        )
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def in_project(tmpdir):
     """ Provide a function to calculate path in a temporary project.
     """
+
     def build_path(*args):
         return os.path.join(tmpdir.strpath, *args)
+
     yield build_path
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def cwd(in_project):
     """ Provide CWD path for the temporary project (root of the project).
     """
-    yield in_project('.')
+    yield in_project(".")
 
 
 def test_venv_reused_for_different_testenvironments(in_project, cwd):
@@ -53,8 +57,9 @@ def test_venv_reused_for_different_testenvironments(in_project, cwd):
     """
     # given
     update_file(
-        in_project('tox.ini'),
-        textwrap.dedent('''
+        in_project("tox.ini"),
+        textwrap.dedent(
+            """
         [tox]
         envlist = flake8, unit
         skipsdist = True
@@ -67,25 +72,29 @@ def test_venv_reused_for_different_testenvironments(in_project, cwd):
             pip --version
             flake8,test: flake8 --version
             unit,test: pytest --version
-    '''))
+    """
+        ),
+    )
     update_file(
-        in_project('requirements-test.txt'),
-        textwrap.dedent('''
+        in_project("requirements-test.txt"),
+        textwrap.dedent(
+            """
         pytest
         flake8
-    '''))
+    """
+        ),
+    )
 
     # exercise
-    _, stdout, stderr = run('tox', cwd, capture_output=True)
+    _, stdout, stderr = run("tox", cwd, capture_output=True)
     print(stdout)
 
     # verify
-    assert 'unit recreate:' not in stdout,\
-        (
-            "Found in command output that 'unit' test environment is "
-            "recreated while it is expected to reuse existing "
-            "'{toxworkdir}/env' virtual environment."
-        )
+    assert "unit recreate:" not in stdout, (
+        "Found in command output that 'unit' test environment is "
+        "recreated while it is expected to reuse existing "
+        "'{toxworkdir}/env' virtual environment."
+    )
 
 
 def test_requirements_are_parsed(in_project, cwd):
@@ -101,43 +110,51 @@ def test_requirements_are_parsed(in_project, cwd):
     """
     # given
     update_file(
-        in_project('tox.ini'),
-        textwrap.dedent('''
+        in_project("tox.ini"),
+        textwrap.dedent(
+            """
         [tox]
         skipsdist=True
 
         [testenv:python]
         deps = -rreq1/requirements.txt
         commands = {posargs}
-    '''))
+    """
+        ),
+    )
     update_file(
-        in_project('req1/requirements.txt'),
-        textwrap.dedent('''
+        in_project("req1/requirements.txt"),
+        textwrap.dedent(
+            """
         pytest-xdist==1.13.0
         pep8
-    '''))
-    run('tox -e python -- python -V', cwd)
-    marker_fpath = in_project('.tox/python/marker.file')
-    update_file(marker_fpath, '')
+    """
+        ),
+    )
+    run("tox -e python -- python -V", cwd)
+    marker_fpath = in_project(".tox/python/marker.file")
+    update_file(marker_fpath, "")
 
     # exercise
     # change order of dependencies
     update_file(
-        in_project('req1/requirements.txt'),
-        textwrap.dedent('''
+        in_project("req1/requirements.txt"),
+        textwrap.dedent(
+            """
         pep8
         pytest-xdist==1.13.0
         # ^ dependency for testing
-    '''))
-    run('tox -e python -- python -V', cwd)
+    """
+        ),
+    )
+    run("tox -e python -- python -V", cwd)
 
     # verify
-    previous_state_hash_file = in_project(
-        '.tox/req1-requirements.txt.*.previous')
+    previous_state_hash_file = in_project(".tox/req1-requirements.txt.*.previous")
     matched = glob.glob(previous_state_hash_file)
     assert matched, "Previous version file is not found."
     # Ensure file with current requirements saved as a hash.
-    expected_reqscontent_sum = 'a0f585568fa08a7c4ff9f58978dc3c4cba1065a6'
+    expected_reqscontent_sum = "a0f585568fa08a7c4ff9f58978dc3c4cba1065a6"
     assert expected_reqscontent_sum == read_text_file(matched[0])
 
 
@@ -146,25 +163,28 @@ def test_venv_recreated_on_requirements_file_update(in_project, cwd):
     """
     # given
     update_file(
-        in_project('tox.ini'),
-        textwrap.dedent('''
+        in_project("tox.ini"),
+        textwrap.dedent(
+            """
         [tox]
         skipsdist=True
 
         [testenv]
         deps = -rreq1/requirements.txt
         commands = {posargs}
-    '''))
-    update_file(in_project('req1/requirements.txt'), 'pytest-xdist==1.13.0\n')
+    """
+        ),
+    )
+    update_file(in_project("req1/requirements.txt"), "pytest-xdist==1.13.0\n")
 
     # exercise
-    run('tox -- python -V', cwd)
-    assert_package_intalled(cwd, package='pytest-xdist', version='1.13')
-    update_file(in_project('req1/requirements.txt'), 'pytest-xdist==1.13.1\n')
-    run('tox -- python -V', cwd)
+    run("tox -- python -V", cwd)
+    assert_package_intalled(cwd, package="pytest-xdist", version="1.13")
+    update_file(in_project("req1/requirements.txt"), "pytest-xdist==1.13.1\n")
+    run("tox -- python -V", cwd)
 
     # verify
-    assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
+    assert_package_intalled(cwd, package="pytest-xdist", version="1.13.1")
 
 
 def test_venv_recreated_on_nested_requirements_file_update(in_project, cwd):
@@ -172,53 +192,61 @@ def test_venv_recreated_on_nested_requirements_file_update(in_project, cwd):
     """
     # given
     update_file(
-        in_project('tox.ini'),
-        textwrap.dedent('''
+        in_project("tox.ini"),
+        textwrap.dedent(
+            """
         [tox]
         skipsdist=True
 
         [testenv]
         deps = -rreq1/requirements.txt
         commands = {posargs}
-    '''))
-    update_file(in_project('req1/requirements.txt'), '-r requirements/base.txt\n')
-    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.0\n')
+    """
+        ),
+    )
+    update_file(in_project("req1/requirements.txt"), "-r requirements/base.txt\n")
+    update_file(in_project("req1/requirements/base.txt"), "pytest-xdist==1.13.0\n")
 
     # exercise
-    run('tox -- python -V', cwd)
-    assert_package_intalled(cwd, package='pytest-xdist', version='1.13')
-    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
-    run('tox -- python -V', cwd)
+    run("tox -- python -V", cwd)
+    assert_package_intalled(cwd, package="pytest-xdist", version="1.13")
+    update_file(in_project("req1/requirements/base.txt"), "pytest-xdist==1.13.1\n")
+    run("tox -- python -V", cwd)
 
     # verify
-    assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
+    assert_package_intalled(cwd, package="pytest-xdist", version="1.13.1")
 
 
-def test_venv_not_recreated_when_nested_requirements_file_do_not_change(in_project, cwd):
+def test_venv_not_recreated_when_nested_requirements_file_do_not_change(
+    in_project, cwd
+):
     """Ensures the venvs do not get recreated when nothing changes in the nested rquirements files.
     """
     # given
     update_file(
-        in_project('tox.ini'),
-        textwrap.dedent('''
+        in_project("tox.ini"),
+        textwrap.dedent(
+            """
         [tox]
         skipsdist=True
 
         [testenv]
         deps = -rreq1/requirements.txt
         commands = {posargs}
-    '''))
-    update_file(in_project('req1/requirements.txt'), '-r requirements/base.txt\n')
-    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
+    """
+        ),
+    )
+    update_file(in_project("req1/requirements.txt"), "-r requirements/base.txt\n")
+    update_file(in_project("req1/requirements/base.txt"), "pytest-xdist==1.13.1\n")
 
     # exercise
-    run('tox -- python -V', cwd)
-    assert_package_intalled(cwd, package='pytest-xdist', version='1.13')
-    update_file(in_project('req1/requirements/base.txt'), 'pytest-xdist==1.13.1\n')
-    run('tox -- python -V', cwd)
+    run("tox -- python -V", cwd)
+    assert_package_intalled(cwd, package="pytest-xdist", version="1.13")
+    update_file(in_project("req1/requirements/base.txt"), "pytest-xdist==1.13.1\n")
+    run("tox -- python -V", cwd)
 
     # verify
-    assert_package_intalled(cwd, package='pytest-xdist', version='1.13.1')
+    assert_package_intalled(cwd, package="pytest-xdist", version="1.13.1")
 
 
 def test_all_requirements_files_are_hashed(in_project, cwd):
@@ -229,8 +257,9 @@ def test_all_requirements_files_are_hashed(in_project, cwd):
     """
     # given
     update_file(
-        in_project('tox.ini'),
-        textwrap.dedent('''
+        in_project("tox.ini"),
+        textwrap.dedent(
+            """
         [tox]
         skipsdist=True
 
@@ -239,39 +268,45 @@ def test_all_requirements_files_are_hashed(in_project, cwd):
             -rreq1/requirements.txt
             -rreq2/requirements.txt
         commands = {posargs}
-    '''))
-    update_file(in_project('req1/requirements.txt'), 'pep8\n')
-    update_file(in_project('req2/requirements.txt'), 'click\n')
+    """
+        ),
+    )
+    update_file(in_project("req1/requirements.txt"), "pep8\n")
+    update_file(in_project("req2/requirements.txt"), "click\n")
 
     # exercise
     run("tox -- python -V", cwd)
 
     # verify
-    prev_files = glob.glob(in_project('.tox/req*-requirements.txt.*.previous'))
+    prev_files = glob.glob(in_project(".tox/req*-requirements.txt.*.previous"))
     assert 2 == len(prev_files), prev_files
 
 
 def assert_package_intalled(toxini_dir, package, version):
-    _, output, _ = run('tox -- pip freeze', toxini_dir, capture_output=True)
+    _, output, _ = run("tox -- pip freeze", toxini_dir, capture_output=True)
     expected_line = "{0}=={1}".format(package, version)
     assert expected_line in output
 
 
-def run(cmd, working_dir, ok_return_codes=(0, ), capture_output=False):
+def run(cmd, working_dir, ok_return_codes=(0,), capture_output=False):
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
     p = subprocess.Popen(
         cmd,
         cwd=working_dir,
         stdout=capture_output and subprocess.PIPE or None,
-        stderr=capture_output and subprocess.PIPE or None)
+        stderr=capture_output and subprocess.PIPE or None,
+    )
     (stdout, stderr) = p.communicate()
     if not capture_output:
-        stdout, stderr = '', ''
+        stdout, stderr = "", ""
 
     if p.returncode not in ok_return_codes:
-        raise Exception("Failed to execute {0!r} with return code {1}:\n {2}"
-                        .format(cmd, p.returncode, stdout + stderr))
+        raise Exception(
+            "Failed to execute {0!r} with return code {1}:\n {2}".format(
+                cmd, p.returncode, stdout + stderr
+            )
+        )
     return p.returncode, str(stdout), str(stderr)
 
 
@@ -279,10 +314,10 @@ def update_file(fpath, content):
     fdir = os.path.dirname(fpath)
     if fdir and not os.path.isdir(fdir):
         os.makedirs(fdir)
-    with open(fpath, 'w') as fd:
+    with open(fpath, "w") as fd:
         fd.write(content)
 
 
 def read_text_file(fpath):
-    with open(fpath, 'r') as fd:
+    with open(fpath, "r") as fd:
         return fd.read()
