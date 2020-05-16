@@ -137,7 +137,7 @@ def test_requirements_are_parsed(in_project, cwd):
     matched = glob.glob(previous_state_hash_file)
     assert matched, "Previous version file is not found."
     # Ensure file with current requirements saved as a hash.
-    expected_reqscontent_sum = 'eb30f761445bda7ca0fe06400a686a31ade734d1'
+    expected_reqscontent_sum = 'a0f585568fa08a7c4ff9f58978dc3c4cba1065a6'
     assert expected_reqscontent_sum == read_text_file(matched[0])
 
 

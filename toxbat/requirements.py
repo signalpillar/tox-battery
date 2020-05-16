@@ -33,23 +33,7 @@ Name of the version file is composed from 2 parts:
 import hashlib
 import os
 
-try:
-    # pip >= 20
-    from pip._internal.network.session import PipSession
-    from pip._internal.req.req_file import parse_requirements
-except ImportError:
-    try:
-        # pip < 10
-        from pip.download import PipSession
-        from pip.req import parse_requirements
-    except ImportError:
-        # It is quick hack to support pip 10 that has changed its internal
-        # structure of the modules.
-        from pip._internal.download import PipSession
-        from pip._internal.req.req_file import parse_requirements
-
 from tox import hookimpl
-
 
 @hookimpl
 def tox_configure(config):
@@ -74,6 +58,25 @@ def _ensure_envs_recreated_on_requirements_update(config):
             env.recreate = True
     return config
 
+def all_nested_req_files(requirement_files):
+    """
+    Get all nested req file names for a list of requirements files.
+
+    :param iter requirements_files: list of requirements files to check.
+    :rtype: iter
+    """
+    for reqfile in requirement_files:
+        yield reqfile
+
+        if os.path.isfile(reqfile):
+            parent_dir = os.path.dirname(reqfile)
+            with open(reqfile) as f:
+                for line in f:
+                    if line.startswith("-r") or line.startswith("-c"):
+                        new_reqfile = os.path.join(parent_dir, line[2:].strip())
+
+                        for i in all_nested_req_files([new_reqfile]):
+                            yield i
 
 def are_requirements_changed(config):
     """Check if any of the requirement files used by testenv is updated.
@@ -89,26 +92,16 @@ def are_requirements_changed(config):
         fname = '{0}.{1}.previous'.format(fname.replace('/', '-'), envdirkey)
         return os.path.join(tox_dir, fname)
 
+    # Pull requirements files from tox deps list.
     requirement_files = map(parse_requirements_fname, deps)
+
+    # Pull all their dependent files.
+    requirement_files = all_nested_req_files(requirement_files)
+
     return any([
         is_changed(reqfile, build_fpath_for_previous_version(reqfile))
         for reqfile in requirement_files
         if reqfile and os.path.isfile(reqfile)])
-
-
-def parse_pip_requirements(requirement_file_path):
-    """
-    Parses requirements using the pip API.
-
-    :param str requirement_file_path: path of the requirement file to parse.
-    :returns list: list of requirements
-    """
-    return sorted(
-        str(r.req)
-        for r in parse_requirements(requirement_file_path,
-                                    session=PipSession())
-        if r.req
-    )
 
 
 def is_changed(fpath, prev_version_fpath):
@@ -122,11 +115,10 @@ def is_changed(fpath, prev_version_fpath):
     if not (fpath and os.path.isfile(fpath)):
         raise ValueError("Requirements file {0!r} doesn't exist.".format(fpath))
 
-    # Compile the list of new requirements.
-    new_requirements = parse_pip_requirements(fpath)
-
-    # Hash them.
-    new_requirements_hash = _str_to_sha1hex(str(new_requirements))
+    # Hash the requirements file.
+    with open(fpath, 'r') as req_file:
+        # Hash them.
+        new_requirements_hash = _str_to_sha1hex(req_file.read())
 
     # Read the hash of the previous requirements if any.
     previous_requirements_hash = 0
