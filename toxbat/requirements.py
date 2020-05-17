@@ -61,11 +61,9 @@ def _ensure_envs_recreated_on_requirements_update(config):
 
 
 def all_nested_req_files(requirement_files):
-    """
-    Get all nested req file names for a list of requirements files.
+    """Get all nested req file names for a list of requirements files.
 
     :param iter requirements_files: list of requirements files to check.
-    :rtype: iter
     """
     for reqfile in requirement_files:
         yield reqfile
@@ -73,12 +71,11 @@ def all_nested_req_files(requirement_files):
         if os.path.isfile(reqfile):
             parent_dir = os.path.dirname(reqfile)
             with open(reqfile) as f:
-                for line in f:
-                    if line.startswith("-r") or line.startswith("-c"):
-                        new_reqfile = os.path.join(parent_dir, line[2:].strip())
-
-                        for i in all_nested_req_files([new_reqfile]):
-                            yield i
+                yield from all_nested_req_files(
+                    os.path.join(parent_dir, line[2:].strip())
+                    for line in f
+                    if line.startswith("-r") or line.startswith("-c")
+                )
 
 
 def are_requirements_changed(config):
@@ -104,9 +101,20 @@ def are_requirements_changed(config):
     return any(
         [
             is_changed(reqfile, build_fpath_for_previous_version(reqfile))
-            for reqfile in requirement_files
+            for reqfile in set(requirement_files)
             if reqfile and os.path.isfile(reqfile)
         ]
+    )
+
+
+def cleanup_requirements_content(content: str) -> str:
+    return "\n".join(
+        sorted(
+            stripped
+            for line in content.strip().splitlines()
+            for stripped in (line.strip(),)
+            if stripped and not stripped.startswith("#")
+        )
     )
 
 
@@ -124,7 +132,9 @@ def is_changed(fpath, prev_version_fpath):
     # Hash the requirements file.
     with open(fpath, "r") as req_file:
         # Hash them.
-        new_requirements_hash = _str_to_sha1hex(req_file.read())
+        new_requirements_hash = _str_to_sha1hex(
+            cleanup_requirements_content(req_file.read())
+        )
 
     # Read the hash of the previous requirements if any.
     previous_requirements_hash = ""

@@ -37,6 +37,50 @@ def cwd(in_project):
     yield in_project(".")
 
 
+class TestAllNestedFiles:
+    def test_non_existing_file_doesnot_cause_error(self, tmpdir):
+        """tox-battery doesn't complain if file doesn't exist."""
+        files = ["f1.txt", "f2.txt"]
+        assert files == list(requirements.all_nested_req_files(files))
+
+    @pytest.mark.parametrize("pipoption", ["-c", "-r"])
+    def test_existing_file_is_nested(self, tmpdir, pipoption):
+        """tox-battery supports nested requirement files."""
+        # Given
+        # There are 2 req-files has_nested.txt and nested.txt
+        # has_nested.txt refers to nested.txt
+        # nested.txt also refers to nonexistingnested.txt (doesn't exist)
+        has_nested = tmpdir / "has_nested.txt"
+        nested = tmpdir / "nested.txt"
+        nonexistingnested = tmpdir / "nonexistingnested.txt"
+
+        update_file(has_nested, f"{pipoption} nested.txt")
+        update_file(nested, f"{pipoption} nonexistingnested.txt")
+
+        # When
+        found = tuple(requirements.all_nested_req_files([str(has_nested)]))
+        # Then
+        assert (str(has_nested), str(nested), str(nonexistingnested)) == found
+
+    def test_duplicated_files_are_returned(self, tmpdir):
+        """If same file is nested many times it will be returned many times."""
+        # Given
+        # There are 2 req-files dev.txt and staging.txt
+        # Both these files refer to tests.txt
+        tests = str(tmpdir / "tests.txt")
+
+        dev = str(tmpdir / "dev.txt")
+        update_file(dev, f"-c tests.txt")
+
+        staging = str(tmpdir / "staging.txt")
+        update_file(staging, f"-r tests.txt")
+
+        # When
+        found = tuple(requirements.all_nested_req_files([dev, staging]))
+        # Then
+        assert (dev, tests, staging, tests) == found
+
+
 def test_venv_reused_for_different_testenvironments(in_project, cwd):
     """ Ensure venv reused by multiple test-environments without recreation.
 
@@ -154,7 +198,7 @@ def test_requirements_are_parsed(in_project, cwd):
     matched = glob.glob(previous_state_hash_file)
     assert matched, "Previous version file is not found."
     # Ensure file with current requirements saved as a hash.
-    expected_reqscontent_sum = "a0f585568fa08a7c4ff9f58978dc3c4cba1065a6"
+    expected_reqscontent_sum = "66e44ee6b16d3cab344c15203da216169cc5d41c"
     assert expected_reqscontent_sum == read_text_file(matched[0])
 
 
