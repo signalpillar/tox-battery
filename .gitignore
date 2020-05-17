@@ -25,3 +25,5 @@ pip-log.txt
 # Sphinx
 docs/_build
 .pytest_cache
+.mypy_cache
+.venv

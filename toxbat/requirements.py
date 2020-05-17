@@ -35,6 +35,7 @@ import os
 
 from tox import hookimpl
 
+
 @hookimpl
 def tox_configure(config):
     """
@@ -58,12 +59,11 @@ def _ensure_envs_recreated_on_requirements_update(config):
             env.recreate = True
     return config
 
+
 def all_nested_req_files(requirement_files):
-    """
-    Get all nested req file names for a list of requirements files.
+    """Get all nested req file names for a list of requirements files.
 
     :param iter requirements_files: list of requirements files to check.
-    :rtype: iter
     """
     for reqfile in requirement_files:
         yield reqfile
@@ -71,12 +71,12 @@ def all_nested_req_files(requirement_files):
         if os.path.isfile(reqfile):
             parent_dir = os.path.dirname(reqfile)
             with open(reqfile) as f:
-                for line in f:
-                    if line.startswith("-r") or line.startswith("-c"):
-                        new_reqfile = os.path.join(parent_dir, line[2:].strip())
+                yield from all_nested_req_files(
+                    os.path.join(parent_dir, line[2:].strip())
+                    for line in f
+                    if line.startswith("-r") or line.startswith("-c")
+                )
 
-                        for i in all_nested_req_files([new_reqfile]):
-                            yield i
 
 def are_requirements_changed(config):
     """Check if any of the requirement files used by testenv is updated.
@@ -89,7 +89,7 @@ def are_requirements_changed(config):
     def build_fpath_for_previous_version(fname):
         tox_dir = config.config.toxworkdir.strpath
         envdirkey = _str_to_sha1hex(str(config.envdir))
-        fname = '{0}.{1}.previous'.format(fname.replace('/', '-'), envdirkey)
+        fname = "{0}.{1}.previous".format(fname.replace("/", "-"), envdirkey)
         return os.path.join(tox_dir, fname)
 
     # Pull requirements files from tox deps list.
@@ -98,10 +98,24 @@ def are_requirements_changed(config):
     # Pull all their dependent files.
     requirement_files = all_nested_req_files(requirement_files)
 
-    return any([
-        is_changed(reqfile, build_fpath_for_previous_version(reqfile))
-        for reqfile in requirement_files
-        if reqfile and os.path.isfile(reqfile)])
+    return any(
+        [
+            is_changed(reqfile, build_fpath_for_previous_version(reqfile))
+            for reqfile in set(requirement_files)
+            if reqfile and os.path.isfile(reqfile)
+        ]
+    )
+
+
+def cleanup_requirements_content(content: str) -> str:
+    return "\n".join(
+        sorted(
+            stripped
+            for line in content.strip().splitlines()
+            for stripped in (line.strip(),)
+            if stripped and not stripped.startswith("#")
+        )
+    )
 
 
 def is_changed(fpath, prev_version_fpath):
@@ -116,12 +130,14 @@ def is_changed(fpath, prev_version_fpath):
         raise ValueError("Requirements file {0!r} doesn't exist.".format(fpath))
 
     # Hash the requirements file.
-    with open(fpath, 'r') as req_file:
+    with open(fpath, "r") as req_file:
         # Hash them.
-        new_requirements_hash = _str_to_sha1hex(req_file.read())
+        new_requirements_hash = _str_to_sha1hex(
+            cleanup_requirements_content(req_file.read())
+        )
 
     # Read the hash of the previous requirements if any.
-    previous_requirements_hash = 0
+    previous_requirements_hash = ""
     if os.path.exists(prev_version_fpath):
         with open(prev_version_fpath) as fd:
             previous_requirements_hash = fd.read()
@@ -131,7 +147,7 @@ def is_changed(fpath, prev_version_fpath):
     # First time when running tox in the project .tox directory is missing.
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
-    with open(prev_version_fpath, 'w+') as fd:
+    with open(prev_version_fpath, "w+") as fd:
         fd.write(new_requirements_hash)
 
     # Compare the hash of the new requirements with the hash of the previous
@@ -151,9 +167,9 @@ def parse_requirements_fname(dep_name):
         if specified otherwise None
     :rtype: str or None
     """
-    req_option = '-r'
+    req_option = "-r"
     if dep_name.startswith(req_option):
-        return dep_name[len(req_option):]
+        return dep_name[len(req_option) :]
 
 
 def _str_to_sha1hex(v):
@@ -162,4 +178,4 @@ def _str_to_sha1hex(v):
     >>> _str_to_sha1hex('abc')
     'a9993e364706816aba3e25717850c26c9cd0d89d'
     """
-    return hashlib.sha1(v.encode('utf-8')).hexdigest()
+    return hashlib.sha1(v.encode("utf-8")).hexdigest()
