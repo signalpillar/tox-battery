@@ -127,7 +127,7 @@ def is_changed(fpath, prev_version_fpath):
         new_requirements_hash = _str_to_sha1hex(req_file.read())
 
     # Read the hash of the previous requirements if any.
-    previous_requirements_hash = 0
+    previous_requirements_hash = ""
     if os.path.exists(prev_version_fpath):
         with open(prev_version_fpath) as fd:
             previous_requirements_hash = fd.read()

@@ -299,11 +299,11 @@ def run(cmd, working_dir, ok_return_codes=(0,), capture_output=False):
     )
     (stdout, stderr) = p.communicate()
     if not capture_output:
-        stdout, stderr = "", ""
+        stdout, stderr = b"", b""
 
     if p.returncode not in ok_return_codes:
         raise Exception(
-            "Failed to execute {0!r} with return code {1}:\n {2}".format(
+            "Failed to execute {0!r} with return code {1}:\n {2!r}".format(
                 cmd, p.returncode, stdout + stderr
             )
         )
