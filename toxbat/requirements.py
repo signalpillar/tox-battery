@@ -68,7 +68,7 @@ def all_nested_req_files(requirement_files):
     for reqfile in requirement_files:
         yield reqfile
 
-        if os.path.isfile(reqfile):
+        if reqfile and os.path.isfile(reqfile):
             parent_dir = os.path.dirname(reqfile)
             with open(reqfile) as f:
                 yield from all_nested_req_files(
