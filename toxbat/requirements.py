@@ -93,7 +93,7 @@ def are_requirements_changed(config):
         return os.path.join(tox_dir, fname)
 
     # Pull requirements files from tox deps list.
-    requirement_files = map(parse_requirements_fname, deps)
+    requirement_files = filter(bool, map(parse_requirements_fname, deps))
 
     # Pull all their dependent files.
     requirement_files = all_nested_req_files(requirement_files)
