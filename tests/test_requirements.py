@@ -43,6 +43,11 @@ class TestAllNestedFiles:
         files = ["f1.txt", "f2.txt"]
         assert files == list(requirements.all_nested_req_files(files))
 
+    def test_none_in_filelist_doesnot_cause_error(self, tmpdir):
+        """tox-battery doesn't complain if file doesn't exist."""
+        files = [None, "f2.txt"]
+        assert files == list(requirements.all_nested_req_files(files))
+
     @pytest.mark.parametrize("pipoption", ["-c", "-r"])
     def test_existing_file_is_nested(self, tmpdir, pipoption):
         """tox-battery supports nested requirement files."""
