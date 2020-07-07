@@ -18,6 +18,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     entry_points={"tox": ["toxbat-requirements = toxbat.requirements"]},
     install_requires=["tox"],
+    python_requires=">=3.6",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
