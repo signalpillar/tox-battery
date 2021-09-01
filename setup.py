@@ -17,7 +17,7 @@ setuptools.setup(
     url="https://github.com/signalpillar/tox-battery",
     packages=setuptools.find_packages(),
     entry_points={"tox": ["toxbat-requirements = toxbat.requirements"]},
-    install_requires=["tox"],
+    install_requires=["tox<4"],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
